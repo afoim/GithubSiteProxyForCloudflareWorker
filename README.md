@@ -47,9 +47,12 @@
    - 将 `github.com` 指向您的Worker路由域名 `gh.您的域名`
    - 将 `avatars.githubusercontent.com` 等其他资源指向您的Worker路由域名 `avatars-githubusercontent-com-gh.您的域名`
 
-4. **配置Worker路由**
-   - 添加路由 `*-gh.您的域名/*` 和 `gh.您的域名/*` 指向您的Worker
+4. **配置DNS记录**
+   - 为您的泛域名添加任何命中CDN的记录
+   - 例如 `*.您的域名` A记录指向任何IP并开启代理
 
+5. **配置Worker路由**
+   - 添加路由 `*-gh.您的域名/*` 和 `gh.您的域名/*` 指向您的Worker
 
 ### 配置自定义域名
 
