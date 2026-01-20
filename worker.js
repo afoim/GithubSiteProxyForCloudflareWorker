@@ -1,23 +1,23 @@
 // 域名映射配置
 const domain_mappings = {
   'github.com': 'gh.',
-  'avatars.githubusercontent.com': 'avatars-githubusercontent-com.',
-  'github.githubassets.com': 'github-githubassets-com.',
-  'collector.github.com': 'collector-github-com.',
-  'api.github.com': 'api-github-com.',
-  'raw.githubusercontent.com': 'raw-githubusercontent-com.',
-  'gist.githubusercontent.com': 'gist-githubusercontent-com.',
-  'github.io': 'github-io.',
-  'assets-cdn.github.com': 'assets-cdn-github-com.',
-  'cdn.jsdelivr.net': 'cdn.jsdelivr-net.',
-  'securitylab.github.com': 'securitylab-github-com.',
-  'www.githubstatus.com': 'www-githubstatus-com.',
-  'npmjs.com': 'npmjs-com.',
-  'git-lfs.github.com': 'git-lfs-github-com.',
-  'githubusercontent.com': 'githubusercontent-com.',
-  'github.global.ssl.fastly.net': 'github-global-ssl-fastly-net.',
-  'api.npms.io': 'api-npms-io.',
-  'github.community': 'github-community.'
+  'avatars.githubusercontent.com': 'avatars-githubusercontent-com-',
+  'github.githubassets.com': 'github-githubassets-com-',
+  'collector.github.com': 'collector-github-com-',
+  'api.github.com': 'api-github-com-',
+  'raw.githubusercontent.com': 'raw-githubusercontent-com-',
+  'gist.githubusercontent.com': 'gist-githubusercontent-com-',
+  'github.io': 'github-io-',
+  'assets-cdn.github.com': 'assets-cdn-github-com-',
+  'cdn.jsdelivr.net': 'cdn.jsdelivr-net-',
+  'securitylab.github.com': 'securitylab-github-com-',
+  'www.githubstatus.com': 'www-githubstatus-com-',
+  'npmjs.com': 'npmjs-com-',
+  'git-lfs.github.com': 'git-lfs-github-com-',
+  'githubusercontent.com': 'githubusercontent-com-',
+  'github.global.ssl.fastly.net': 'github-global-ssl-fastly-net-',
+  'api.npms.io': 'api-npms-io-',
+  'github.community': 'github-community-'
 };
 
 // 需要重定向的路径
@@ -29,11 +29,10 @@ addEventListener('fetch', event => {
 
 async function handleRequest(request) {
   const url = new URL(request.url);
-  const current_host = url.host;
-  
-  // 检测Host头，优先使用Host头中的域名来决定后缀
+  // 统一转小写
+  const current_host = url.host.toLowerCase();
   const host_header = request.headers.get('Host');
-  const effective_host = host_header || current_host;
+  const effective_host = (host_header || current_host).toLowerCase();
   
   // 检查特殊路径重定向
   if (redirect_paths.includes(url.pathname)) {
@@ -49,20 +48,32 @@ async function handleRequest(request) {
   // 从有效主机名中提取前缀
   const host_prefix = getProxyPrefix(effective_host);
   if (!host_prefix) {
-    return new Response('Domain not configured for proxy', { status: 404 });
+    return new Response(`Domain not configured for proxy. Host: ${effective_host}, Prefix check failed`, { status: 404 });
   }
 
   // 根据前缀找到对应的原始域名
   let target_host = null;
-  for (const [original, prefix] of Object.entries(domain_mappings)) {
-    if (prefix === host_prefix) {
-      target_host = original;
-      break;
+  
+  // 解析 *-gh. 模式
+  if (host_prefix && host_prefix.endsWith('-gh.')) {
+    const prefix_part = host_prefix.slice(0, -4); // 移除 -gh.
+    // 尝试找到对应的原始域名
+    for (const original of Object.keys(domain_mappings)) {
+      const normalized_original = original.trim().toLowerCase();
+      if (normalized_original.replace(/\./g, '-') === prefix_part) {
+        target_host = original;
+        break;
+      }
     }
   }
 
   if (!target_host) {
-    return new Response('Domain not configured for proxy', { status: 404 });
+    // 再次检查 github.com 的情况，防止漏网
+    if (host_prefix === 'gh.') {
+        target_host = 'github.com';
+    } else {
+        return new Response(`Domain not configured for proxy. Host: ${effective_host}, Prefix: ${host_prefix}, Target lookup failed`, { status: 404 });
+    }
   }
 
   // 直接使用正则表达式处理最常见的嵌套URL问题
@@ -120,16 +131,15 @@ async function handleRequest(request) {
 
 // 获取当前主机名的前缀，用于匹配反向映射
 function getProxyPrefix(host) {
-  // 检查主机名是否以 gh. 开头
+  // 检查是否正好是 gh. 开头（对应 github.com）
   if (host.startsWith('gh.')) {
     return 'gh.';
   }
-  
-  // 检查其他映射前缀
-  for (const prefix of Object.values(domain_mappings)) {
-    if (host.startsWith(prefix)) {
-      return prefix;
-    }
+
+  // 检查 *-gh. 模式
+  const ghMatch = host.match(/^([a-z0-9-]+-gh\.)/);
+  if (ghMatch) {
+    return ghMatch[1];
   }
   
   return null;
@@ -149,9 +159,23 @@ async function modifyResponse(response, host_prefix, effective_hostname) {
   const domain_suffix = effective_hostname.substring(host_prefix.length);
   
   // 替换所有域名引用
-  for (const [original_domain, proxy_prefix] of Object.entries(domain_mappings)) {
+  for (const [original_domain, _] of Object.entries(domain_mappings)) {
     const escaped_domain = original_domain.replace(/\./g, '\\.');
-    const full_proxy_domain = `${proxy_prefix}${domain_suffix}`;
+    
+    // 强制把所有域名的前缀都改成 *-gh. 格式
+    let current_prefix = original_domain.replace(/\./g, '-') + '-gh.';
+    
+    // 特殊处理 github.com
+    if (original_domain === 'github.com') {
+      current_prefix = 'gh.';
+    }
+    
+    // 移除可能已经存在的重复后缀
+    // 如果 domain_suffix 已经包含了 host_prefix 对应的部分，这会导致重复
+    // 正确的逻辑是：domain_suffix 应该是去掉 host_prefix 后的部分，这在上面已经计算了
+    // 但是，如果 host_prefix 提取有误，或者 effective_hostname 结构不符合预期，可能会出问题
+    
+    const full_proxy_domain = `${current_prefix}${domain_suffix}`;
     
     // 替换完整URLs
     text = text.replace(
@@ -167,12 +191,24 @@ async function modifyResponse(response, host_prefix, effective_hostname) {
   }
 
   // 处理相对路径，使用有效主机名
-  if (host_prefix === 'gh.') {
-    text = text.replace(
-      /(?<=["'])\/(?!\/|[a-zA-Z]+:)/g,
-      `https://${effective_hostname}/`
-    );
-  }
+  // 所有模式下都生效
+  // 注意：这个替换可能会导致问题，因为它会匹配所有以 / 开头的路径
+  // 许多 JS/CSS 引用可能是相对路径，但也可能是根路径
+  // 如果这里强制替换为绝对路径，可能会导致 URL 拼接错误
+  // 例如：如果原文本是 "/assets/foo.js"，它会被替换为 "https://github-githubassets-com-gh.xxx.com/assets/foo.js"
+  // 如果原文本已经是 "https://github-githubassets-com-gh.xxx.com/assets/foo.js" (被上面的循环替换了)，这里不会再匹配（因为前面的 http... 不符合 (?<=["'])）
+  // 但是，如果原文本是相对路径，如 "/assets/foo.js"，并且当前页面已经是代理页面
+  // 浏览器会自动将其解析为当前域名下的路径，通常不需要我们手动替换
+  // 手动替换反而可能导致像 `https://domain.com/assetshttps://domain.com/foo.js` 这种奇怪的 URL
+  // 除非是为了处理某些特定的动态加载脚本，否则应该谨慎使用
+  
+  // 暂时注释掉这段代码，看看是否解决 "URL 拼接" 问题
+  /*
+  text = text.replace(
+    /(?<=["'])\/(?!\/|[a-zA-Z]+:)/g,
+    `https://${effective_hostname}/`
+  );
+  */
 
   return text;
 }

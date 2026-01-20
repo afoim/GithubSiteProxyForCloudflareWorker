@@ -6,7 +6,7 @@
 
 ## 特性
 
-- **子域名匹配系统**：使用 `gh.` 前缀作为GitHub的代理入口，支持任何域名后缀
+- **子域名匹配系统**：使用 `gh.` 前缀作为GitHub主站的代理入口，支持任何域名后缀
 - **完整的资源映射**：支持GitHub相关的所有主要域名，包括API、静态资源、用户内容等
 - **内容替换**：自动替换响应中的所有域名引用，确保链接正常工作
 - **路径修复**：解决嵌套URL路径问题，特别针对仓库提交信息等特殊路径
@@ -18,10 +18,10 @@
 服务支持以下GitHub相关域名的代理访问：
 
 - github.com → gh.[您的域名]
-- avatars.githubusercontent.com → avatars-githubusercontent-com.[您的域名]
-- github.githubassets.com → github-githubassets-com.[您的域名]
-- api.github.com → api-github-com.[您的域名]
-- raw.githubusercontent.com → raw-githubusercontent-com.[您的域名]
+- avatars.githubusercontent.com → avatars-githubusercontent-com-gh.[您的域名]
+- github.githubassets.com → github-githubassets-com-gh.[您的域名]
+- api.github.com → api-github-com-gh.[您的域名]
+- raw.githubusercontent.com → raw-githubusercontent-com-gh.[您的域名]
 - 以及更多GitHub相关服务域名
 
 ## 部署指南
@@ -42,17 +42,18 @@
    - 将提供的代码粘贴到代码编辑器中
    - 给Worker命名并保存
 
-3. **配置DNS**
-   - 为每个代理域名前缀创建CNAME记录，指向您的Worker
-   - 例如：创建 `gh.您的域名` 的CNAME记录，指向您的Worker路由
+3. **配置对应其他资源的域名映射**
+   - 更改域名映射配置，将所有相关域名指向您的Worker路由
+   - 将 `github.com` 指向您的Worker路由域名 `gh.您的域名`
+   - 将 `avatars.githubusercontent.com` 等其他资源指向您的Worker路由域名 `avatars-githubusercontent-com-gh.您的域名`
 
 4. **配置Worker路由**
-   - 添加路由模式如 `gh.您的域名/*` 指向您的Worker
-   - 对其他代理子域重复此操作
+   - 添加路由 `*-gh.您的域名/*` 和 `gh.您的域名/*` 指向您的Worker
+
 
 ### 配置自定义域名
 
-如果您想使用不同的域名前缀，请修改代码中的`domain_mappings`对象，将默认的`gh.`等前缀替换为您喜欢的前缀。
+如果您想使用不同的域名前缀（仅github.com主站），请修改代码中的`domain_mappings`对象，将默认的`gh.`等前缀替换为您喜欢的前缀。
 
 ## 使用方法
 
