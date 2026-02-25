@@ -21,7 +21,7 @@ const domain_mappings = {
 };
 
 // 需要重定向的路径
-const redirect_paths = ['/', '/login', '/signup', '/copilot'];
+const redirect_paths = ['/', '/login', '/signup', '/copilot', '/search/custom_scopes', '/session'];
 
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request));
