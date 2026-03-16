@@ -100,6 +100,8 @@ async function handleRequest(request) {
   const new_headers = new Headers(request.headers);
   new_headers.set('Host', target_host);
   new_headers.set('Referer', new_url.href);
+  // 强制要求源站返回未压缩的内容，确保我们可以正常修改文本
+  new_headers.delete('accept-encoding');
   
   try {
     // 发起请求
